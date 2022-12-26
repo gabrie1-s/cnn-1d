@@ -318,6 +318,30 @@ def optmize_cnn(neurons, conv_layers, optimizer, filters):
   return classificador
 
 # %%
+def cross_val_func(model, x_train, y_train, batch_size, folds):
+  kf = KFold(n_splits=folds, random_state=1, shuffle=True)
+  score = []
+  
+  for train_index, test_index in kf.split(x_train): 
+
+    #print("TRAIN:", train_index, "TEST:", test_index)
+    xtr, xte = x_train[train_index], x_train[test_index]
+    ytr, yte = y_train.iloc[train_index], y_train.iloc[test_index]
+
+    model.fit(xtr, ytr, epochs=150, batch_size=batch_size, verbose=0)
+
+    y_pred = model.predict(xte)
+    y_pred = (np.asarray(y_pred)).round()
+    y_pred = y_pred.astype(int)
+    yte = np.array(yte)
+
+    acc = accuracy_score(yte, y_pred)
+    
+    score.append(acc)
+
+  return score
+
+# %%
 def evaluate_network(neurons, conv_layers, optimizer, batch_size, filters):
     global patience
     global count
@@ -338,26 +362,7 @@ def evaluate_network(neurons, conv_layers, optimizer, batch_size, filters):
 
     model = optmize_cnn(neurons, conv_layers, optimizer_val, filters)
 
-
-    kf = KFold(n_splits=5, random_state=1, shuffle=True)
-    score = []
-    
-    for train_index, test_index in kf.split(x_train): 
-
-        #print("TRAIN:", train_index, "TEST:", test_index)
-        xtr, xte = x_train[train_index], x_train[test_index]
-        ytr, yte = y_train.iloc[train_index], y_train.iloc[test_index]
-
-        model.fit(xtr, ytr, epochs=150, batch_size=batch_size, verbose=0)
-
-        y_pred = model.predict(xte)
-        y_pred = (np.asarray(y_pred)).round()
-        y_pred = y_pred.astype(int)
-        yte = np.array(yte)
-
-        acc = accuracy_score(yte, y_pred)
-        
-        score.append(acc)
+    score = cross_val_func(model, x_train, y_train, batch_size, 5)
 
     score = sum(score)/len(score)
 
@@ -419,16 +424,12 @@ optimizerL = [Adam, SGD, RMSprop, Adadelta, Adagrad, Adamax, Nadam, Ftrl, Adam]
 #|   iter    |  target   | batch_... | conv_l... |  filters  |  neurons  | optimizer |
 #| 19        | 0.8501    | 16.79     | 4.798     | 5.35      | 151.4     | 2.857     |
 
-model = optmize_cnn(round(151.4), round(4.798), optimizerL[round(2.857)],
-                    round(2**round(5.35)))
+model = optmize_cnn(round(151.4), round(4.798), optimizerL[round(2.857)], 2**round(5.35))
 
-
-classificador = KerasClassifier(build_fn=model, epochs=150, batch_size=10*round(16.79), verbose=0)
-
-classificador.fit(x_train, y_train, verbose=1)
+model.fit(x_train, y_train, epochs=150, batch_size=10*round(16.79), verbose=0)
 
 # %%
-y_pred = classificador.predict(x_valid)
+y_pred = model.predict(x_valid)
 y_pred = pd.DataFrame(y_pred)
 y_pred.columns = ['A', 'N', 'O', '~']
 
@@ -462,7 +463,7 @@ for signal in x_test:
   samples = np.array(samples)
   samples = samples.reshape(samples.shape[0],samples.shape[1], 1)
   
-  prediction = classificador.predict(samples)
+  prediction = model.predict(samples)
   prediction = pd.DataFrame(prediction)
   prediction.columns = ['A', 'N', 'O', '~']
   prediction = prediction.idxmax(axis=1)
@@ -500,3 +501,5 @@ plt.savefig("test.png")
 accuracy_score(y_test, y_pred)
 
 
+
+# %%
